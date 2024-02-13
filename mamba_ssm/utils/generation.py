@@ -116,6 +116,10 @@ def sample(logits, top_k=1, top_p=0.0, min_p=0.0, temperature=1.0):
                 dim=-1
             )
 
+DEBUG=True
+if DEBUG:
+    print("GENERATING IN DEBUG MODE")
+    debug_info={"logits":[]}
 
 @torch.inference_mode()
 def decode(
@@ -191,6 +195,9 @@ def decode(
             logits = model._decoding_cache.run(
                 input_ids, position_ids, inference_params.seqlen_offset
             ).squeeze(dim=1)
+            if DEBUG:
+                print("ADDING NEW LOGITS")
+                debug_info["logits"].append(logits)
         return logits[..., :vocab_size] if vocab_size is not None else logits
 
     def sample_tokens(logits, inference_params):
@@ -260,6 +267,10 @@ class GenerationMixin:
         output = decode(
             input_ids, self, max_length, top_k=top_k, top_p=top_p, min_p = min_p, temperature=temperature, **kwargs
         )
+
+        if DEBUG:
+            print("SAVING DEBUG INFO TO debug_info_mamba_gpu.pth")
+            torch.save(debug_info,"debug_info_mamba_gpu.pth")
         if not output_scores:
             output.scores = None
         return output if return_dict_in_generate else output.sequences

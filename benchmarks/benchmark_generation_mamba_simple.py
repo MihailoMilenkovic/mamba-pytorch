@@ -27,7 +27,6 @@ parser.add_argument("--repetition-penalty", type=float, default=1.0)
 parser.add_argument("--batch", type=int, default=1)
 args = parser.parse_args()
 
-repeats = 3
 device = "cuda"
 dtype = torch.float16
 
@@ -41,6 +40,8 @@ else:
     model = AutoModelForCausalLM.from_pretrained(args.model_name, device_map={"": device}, torch_dtype=dtype)
 model.eval()
 print(f"Number of parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+
+start=time.time()
 
 torch.random.manual_seed(0)
 if args.prompt is None:
@@ -83,10 +84,5 @@ out = fn()
 if args.prompt is not None:
     print(tokenizer.batch_decode(out.sequences.tolist()))
 
-torch.cuda.synchronize()
-start = time.time()
-for _ in range(repeats):
-    fn()
-torch.cuda.synchronize()
 print(f"Prompt length: {len(input_ids[0])}, generation length: {len(out.sequences[0]) - len(input_ids[0])}")
-print(f"{args.model_name} prompt processing + decoding time: {(time.time() - start) / repeats * 1000:.0f}ms")
+print(f"{args.model_name} prompt processing + decoding time: {(time.time() - start) * 1000:.0f}ms")
