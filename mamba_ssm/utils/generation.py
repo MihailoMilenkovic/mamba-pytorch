@@ -11,6 +11,10 @@ from einops import rearrange, repeat
 from torch import Tensor
 from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer
 
+DEBUG=True
+if DEBUG:
+    print("ADDING DEBUG INFO...")
+    debug_info={"steps":[],"curr_step":0} 
 
 @dataclass
 class InferenceParams:
@@ -23,7 +27,7 @@ class InferenceParams:
     batch_size_offset: int = 0
     key_value_memory_dict: dict = field(default_factory=dict)
     lengths_per_sample: Optional[Tensor] = None
-
+    debug_info: dict = field(default_factory=dict)
     def reset(self, max_seqlen, max_batch_size):
         self.max_seqlen = max_seqlen
         self.max_batch_size = max_batch_size
@@ -100,7 +104,6 @@ def sample(logits, top_k=1, top_p=0.0, temperature=1.0):
                 dim=-1
             )
 
-DEBUG=True
 
 @torch.inference_mode()
 def decode(
@@ -139,9 +142,7 @@ def decode(
     batch_size, seqlen_og = input_ids.shape
     teacher_output_len = teacher_outputs.shape[1] if teacher_outputs is not None else 0
     inference_params = InferenceParams(max_seqlen=max_length, max_batch_size=batch_size)
-    if DEBUG:
-        print("ADDING DEBUG INFO...")
-        debug_info={"steps":[],"curr_step":0}    
+    inference_params.debug_info=debug_info
     def get_logits(input_ids, inference_params):
         decoding = inference_params.seqlen_offset > 0
         if decoding:
@@ -161,7 +162,9 @@ def decode(
         ).logits.squeeze(dim=1)
         if DEBUG:
             debug_info["steps"].append({})
-            debug_info["steps"][debug_info["curr_step"]].append(logits)
+            curr_step=debug_info["curr_step"]
+            curr_info=debug_info["steps"][curr_step]
+            curr_info["logits"]=logits.clone()
             debug_info["curr_step"]+=1
 
         return logits[..., :vocab_size] if vocab_size is not None else logits
@@ -203,6 +206,7 @@ def decode(
         streamer.end()
     output_cls = GreedySearchDecoderOnlyOutput if top_k == 1 else SampleDecoderOnlyOutput
     if DEBUG:
+        print("DEBUG INFO:",debug_info)
         torch.save(debug_info,"debug_info_mamba_cpu.pth")
     return output_cls(sequences=torch.cat(sequences, dim=1), scores=tuple(scores))
 

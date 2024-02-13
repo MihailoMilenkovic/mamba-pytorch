@@ -27,7 +27,7 @@ parser.add_argument("--batch", type=int, default=1)
 args = parser.parse_args()
 
 device = "cpu"
-dtype = torch.float32
+dtype = torch.float16
 
 print(f"Loading model {args.model_name}")
 is_mamba = args.model_name.startswith("state-spaces/mamba-")
