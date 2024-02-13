@@ -31,6 +31,7 @@ def compare_tensors(gpu_info=debug_info_gpu,cpu_info=debug_info_cpu,tensor_name=
 
 compare_tensors(debug_info_gpu,debug_info_cpu,"input_ids")
 compare_tensors(debug_info_gpu,debug_info_cpu,"embedding_layer_states")
+compare_tensors(debug_info_gpu,debug_info_cpu,"hidden_states_first_block_input")
 compare_tensors(debug_info_gpu,debug_info_cpu,"hidden_states_first_layer_before_mixer")
 compare_tensors(debug_info_gpu,debug_info_cpu,"first_layer_out_states")
 

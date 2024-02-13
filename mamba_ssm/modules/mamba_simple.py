@@ -321,6 +321,8 @@ class Block(nn.Module):
         self.fused_add_norm = fused_add_norm
         self.mixer = mixer_cls(dim)
         self.norm = norm_cls(dim)
+        print("NORM CLS IS",norm_cls)
+        exit()
         if self.fused_add_norm:
             assert RMSNorm is not None, "RMSNorm import fails"
             assert isinstance(
@@ -336,24 +338,29 @@ class Block(nn.Module):
             hidden_states: the sequence to the encoder layer (required).
             residual: hidden_states = Mixer(LN(residual))
         """
-        if not self.fused_add_norm:
-            residual = (hidden_states + residual) if residual is not None else hidden_states
-            hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
-            if self.residual_in_fp32:
-                residual = residual.to(torch.float32)
-        else:
-            fused_add_norm_fn = rms_norm_fn if isinstance(self.norm, RMSNorm) else layer_norm_fn
-            hidden_states, residual = fused_add_norm_fn(
-                hidden_states,
-                self.norm.weight,
-                self.norm.bias,
-                residual=residual,
-                prenorm=True,
-                residual_in_fp32=self.residual_in_fp32,
-                eps=self.norm.eps,
-            )
         debug_info=inference_params.debug_info
         add_debug=debug_info is not None and debug_info["curr_step"]==0
+        if add_debug:
+            if not "hidden_states_first_block_input" in debug_info:
+                debug_info["hidden_states_first_block_input"]=hidden_states.clone()
+        # if not self.fused_add_norm:
+        # if not not self.fused_add_norm:
+        residual = (hidden_states + residual) if residual is not None else hidden_states
+        hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
+        if self.residual_in_fp32:
+            print("RESIDUAL IS FP32")
+            residual = residual.to(torch.float32)
+        # else:
+        #     fused_add_norm_fn = rms_norm_fn if isinstance(self.norm, RMSNorm) else layer_norm_fn
+        #     hidden_states, residual = fused_add_norm_fn(
+        #         hidden_states,
+        #         self.norm.weight,
+        #         self.norm.bias,
+        #         residual=residual,
+        #         prenorm=True,
+        #         residual_in_fp32=self.residual_in_fp32,
+        #         eps=self.norm.eps,
+        #     )
         if add_debug:
             if not "hidden_states_first_layer_before_mixer" in debug_info:
                 debug_info["hidden_states_first_layer_before_mixer"]=hidden_states.clone()
