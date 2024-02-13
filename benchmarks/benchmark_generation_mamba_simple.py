@@ -57,7 +57,7 @@ if is_mamba:
     fn = lambda: model.generate(
         input_ids=input_ids,
         max_length=max_length,
-        cg=True,
+        cg=False,
         return_dict_in_generate=True,
         output_scores=True,
         enable_timing=False,
@@ -82,7 +82,7 @@ else:
     )
 out = fn()
 if args.prompt is not None:
-    print(tokenizer.batch_decode(out.sequences.tolist()))
+    print(tokenizer.batch_decode(out.sequences)[0])
 
 print(f"Prompt length: {len(input_ids[0])}, generation length: {len(out.sequences[0]) - len(input_ids[0])}")
 print(f"{args.model_name} prompt processing + decoding time: {(time.time() - start) * 1000:.0f}ms")

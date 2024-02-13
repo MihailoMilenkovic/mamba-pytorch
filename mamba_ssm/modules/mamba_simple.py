@@ -123,6 +123,12 @@ class Mamba(nn.Module):
         """
         batch, seqlen, dim = hidden_states.shape
 
+        # debug_info=inference_params.debug_info
+        # if debug_info is not None and debug_info["curr_step"]==0 and not ("first_layer_visited" in debug_info):
+        #     print("ADDING FIRST LAYER INFO")
+        #     debug_info["first_layer_visited"]=True
+        #     debug_info["first_layer_hidden_states"]=hidden_states.clone()
+
         conv_state, ssm_state = None, None
         if inference_params is not None:
             conv_state, ssm_state = self._get_states_from_cache(inference_params, batch)
@@ -346,6 +352,11 @@ class Block(nn.Module):
                 residual_in_fp32=self.residual_in_fp32,
                 eps=self.norm.eps,
             )
+        debug_info=inference_params.debug_info
+        add_debug=debug_info is not None and debug_info["curr_step"]==0
+        if add_debug:
+            if not "hidden_states_first_layer_before_mixer" in debug_info:
+                debug_info["hidden_states_first_layer_before_mixer"]=hidden_states.clone()
         hidden_states = self.mixer(hidden_states, inference_params=inference_params)
         return hidden_states, residual
 

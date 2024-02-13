@@ -13,7 +13,10 @@ from torch import Tensor
 from torch.profiler import ProfilerActivity, profile, record_function
 from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer
 
-
+DEBUG=True
+if DEBUG:
+    print("ADDING DEBUG INFO...")
+    debug_info={"steps":[],"curr_step":0}    
 @dataclass
 class InferenceParams:
     """Inference parameters that are passed to the main model in order
@@ -25,7 +28,7 @@ class InferenceParams:
     batch_size_offset: int = 0
     key_value_memory_dict: dict = field(default_factory=dict)
     lengths_per_sample: Optional[Tensor] = None
-
+    debug_info: dict = field(default_factory=dict)
     def reset(self, max_seqlen, max_batch_size):
         self.max_seqlen = max_seqlen
         self.max_batch_size = max_batch_size
@@ -116,10 +119,6 @@ def sample(logits, top_k=1, top_p=0.0, min_p=0.0, temperature=1.0):
                 dim=-1
             )
 
-DEBUG=True
-if DEBUG:
-    print("GENERATING IN DEBUG MODE")
-    debug_info={"logits":[]}
 
 @torch.inference_mode()
 def decode(
@@ -172,7 +171,7 @@ def decode(
         inference_params.reset(max_length, batch_size)
     else:
         inference_params = InferenceParams(max_seqlen=max_length, max_batch_size=batch_size)
-
+        inference_params.debug_info=debug_info
     def get_logits(input_ids, inference_params):
         decoding = inference_params.seqlen_offset > 0
         if decoding:
@@ -184,20 +183,18 @@ def decode(
             )
         else:
             position_ids = None
-        if not cg or not decoding:
-            logits = model(
-                input_ids,
-                position_ids=position_ids,
-                inference_params=inference_params,
-                num_last_tokens=1,
-            ).logits.squeeze(dim=1)
-        else:
-            logits = model._decoding_cache.run(
-                input_ids, position_ids, inference_params.seqlen_offset
-            ).squeeze(dim=1)
-            if DEBUG:
-                print("ADDING NEW LOGITS")
-                debug_info["logits"].append(logits)
+        logits = model(
+            input_ids,
+            position_ids=position_ids,
+            inference_params=inference_params,
+            num_last_tokens=1,
+        ).logits.squeeze(dim=1)
+        if DEBUG:
+            debug_info["steps"].append({})
+            curr_step=debug_info["curr_step"]
+            curr_info=debug_info["steps"][curr_step]
+            curr_info["logits"]=logits.clone()
+            debug_info["curr_step"]+=1
         return logits[..., :vocab_size] if vocab_size is not None else logits
 
     def sample_tokens(logits, inference_params):
@@ -269,7 +266,7 @@ class GenerationMixin:
         )
 
         if DEBUG:
-            print("SAVING DEBUG INFO TO debug_info_mamba_gpu.pth")
+            print("DEBUG INFO:",debug_info)
             torch.save(debug_info,"debug_info_mamba_gpu.pth")
         if not output_scores:
             output.scores = None
