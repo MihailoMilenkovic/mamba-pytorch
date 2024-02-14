@@ -4,13 +4,15 @@ from typing import Optional
 from dataclasses import dataclass, field
 from functools import partial
 import math
+from collections import namedtuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from collections import namedtuple
+from einops import rearrange
+
 
 from mamba_ssm.generation import GenerationMixin
 from mamba_ssm.hf import load_config_hf, load_state_dict_hf
@@ -121,8 +123,7 @@ def selective_scan(u, delta, A, B, C, D=None, z=None):
         ys.append(y)
     y = torch.stack(ys, dim=2) # (batch dim L)
 
-    # out = y + u * rearrange(D, "d -> d 1")
-    out = y + u * D.unsqueeze(1)
+    out = y + u * rearrange(D, "d -> d 1")
 
     if z is not None:
         out = out * F.silu(z)
@@ -374,17 +375,14 @@ class Mamba(nn.Module):
             return out
 
         # We do matmul and transpose BLH -> HBL at the same time
-        # xz = rearrange(
-        #     self.in_proj.weight @ rearrange(hidden_states, "b l d -> d (b l)"),
-        #     "d (b l) -> b d l",
-        #     l=seqlen,
-        # )
-        xz_tmp=self.in_proj.weight @ hidden_states.permute(2, 0, 1).view(hidden_states.shape[-1],-1)
-        xz = xz_tmp.view(-1, xz_tmp.shape[0], seqlen)
+        xz = rearrange(
+            self.in_proj.weight @ rearrange(hidden_states, "b l d -> d (b l)"),
+            "d (b l) -> b d l",
+            l=seqlen,
+        )
         
         if self.in_proj.bias is not None:
-            # xz = xz + rearrange(self.in_proj.bias.to(dtype=xz.dtype), "d -> d 1")
-            xz = xz + self.in_proj.bias.to(dtype=xz.dtype).unsqueeze(1)
+            xz = xz + rearrange(self.in_proj.bias.to(dtype=xz.dtype), "d -> d 1")
         x, z = xz.chunk(2, dim=1)
 
         A = -torch.exp(self.A_log.float())  # (d_inner, d_state)
@@ -398,27 +396,20 @@ class Mamba(nn.Module):
         # We're careful here about the layout, to avoid extra transposes.
         # We want dt to have d as the slowest moving dimension
         # and L as the fastest moving dimension, since those are what the ssm_scan kernel expects.
-        # x_dbl = self.x_proj(rearrange(x, "b d l -> (b l) d"))  # (bl d)
-        x_dbl = self.x_proj(x.view(-1, x.size(2)).transpose(0, 1))  # (bl d)
+        x_dbl = self.x_proj(rearrange(x, "b d l -> (b l) d"))  # (bl d)
         dt, B, C = torch.split(x_dbl, [self.dt_rank, self.d_state, self.d_state], dim=-1)
 
         dt = self.dt_proj.weight @ dt.t()
-        # dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
-        dt = dt.view(dt.size(0), -1, seqlen).permute(1, 0, 2)
+        dt = rearrange(dt, "d (b l) -> b d l", l=seqlen)
         dt = F.softplus(dt + self.dt_proj.bias[..., None].float())
 
-        # B = rearrange(B, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
-        # C = rearrange(C, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
-        bl, dstate = B.size()
-        b = bl // seqlen
-        B = B.view(b, seqlen, dstate).transpose(1, 2)
-        C = C.view(b, seqlen, dstate).transpose(1, 2)
+        B = rearrange(B, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
+        C = rearrange(C, "(b l) dstate -> b dstate l", l=seqlen).contiguous()
 
         assert self.activation in ["silu", "swish"]
         y, last_state = selective_scan(x, dt, A, B, C, self.D.float(), z)
         ssm_state.copy_(last_state)
-        # y = rearrange(y, "b d l -> b l d")
-        y=y.transpose(1,2)
+        y = rearrange(y, "b d l -> b l d")
         out = self.out_proj(y)
         return out
 
@@ -432,8 +423,7 @@ class Mamba(nn.Module):
         # Conv step
         conv_state.copy_(torch.roll(conv_state, shifts=-1, dims=-1))  # Update state (B D W)
         conv_state[:, :, -1] = x
-        # x = torch.sum(conv_state * rearrange(self.conv1d.weight, "d 1 w -> d w"), dim=-1)  # (B D)
-        x = torch.sum(conv_state * self.conv1d.weight.squeeze(1), dim=-1)  # (B D)
+        x = torch.sum(conv_state * rearrange(self.conv1d.weight, "d 1 w -> d w"), dim=-1)  # (B D)
         x = x + self.conv1d.bias
         x = self.act(x).to(dtype=dtype)
 
@@ -449,8 +439,7 @@ class Mamba(nn.Module):
         # Discretize A and B
         dA = torch.exp(torch.einsum("bd,dn->bdn", dt, A))
         dB = torch.einsum("bd,bn->bdn", dt, B)
-        # ssm_state.copy_(ssm_state * dA + rearrange(x, "b d -> b d 1") * dB)
-        ssm_state.copy_(ssm_state * dA + x.unsqueeze(-1) * dB)
+        ssm_state.copy_(ssm_state * dA + rearrange(x, "b d -> b d 1") * dB)
         y = torch.einsum("bdn,bn->bd", ssm_state.to(dtype), C)
         y = y + self.D.to(dtype) * x
         y = y * self.act(z)  # (B D)
