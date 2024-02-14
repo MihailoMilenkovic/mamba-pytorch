@@ -186,9 +186,6 @@ class MixerModel(nn.Module):
         # the main branch (output of MLP / Mixer). The model definition is unchanged.
         # This is for performance reason: we can fuse add + layer_norm.
         self.fused_add_norm = fused_add_norm
-        if self.fused_add_norm:
-            if layer_norm_fn is None or rms_norm_fn is None:
-                raise ImportError("Failed to import LayerNorm / RMSNorm kernels")
 
         self.layers = nn.ModuleList(
             [
@@ -219,23 +216,23 @@ class MixerModel(nn.Module):
     def forward(self, input_ids, inference_params=None):
         hidden_states = self.embedding(input_ids)
         residual = None
-        if hasattr(inference_params,"debug_info"):
-            debug_info=inference_params.debug_info
-            add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
-            if add_debug:
-                print("ADDING EMBEDDING LAYER INFO")
-                assert not "embedding_layer_states" in debug_info
-                debug_info["embedding_layer_states"]=hidden_states.clone()
-                debug_info["input_ids"]=input_ids.clone()
-        else:
-            add_debug=False
+        # if hasattr(inference_params,"debug_info"):
+        #     debug_info=inference_params.debug_info
+        #     add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
+        #     if add_debug:
+        #         print("ADDING EMBEDDING LAYER INFO")
+        #         assert not "embedding_layer_states" in debug_info
+        #         debug_info["embedding_layer_states"]=hidden_states.clone()
+        #         debug_info["input_ids"]=input_ids.clone()
+        # else:
+        #     add_debug=False
 
         for layer in self.layers:
             hidden_states, residual = layer(
                 hidden_states, residual, inference_params=inference_params
             )
-            if add_debug and not "first_layer_out_states" in debug_info:
-                debug_info["first_layer_out_states"]=hidden_states.clone()
+            # if add_debug and not "first_layer_out_states" in debug_info:
+            #     debug_info["first_layer_out_states"]=hidden_states.clone()
         residual = (hidden_states + residual) if residual is not None else hidden_states
         hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
         return hidden_states
@@ -526,18 +523,18 @@ class Block(nn.Module):
             hidden_states: the sequence to the encoder layer (required).
             residual: hidden_states = Mixer(LN(residual))
         """
-        debug_info=inference_params.debug_info
-        add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
-        if add_debug:
-            if not "hidden_states_first_block_input" in debug_info:
-                debug_info["hidden_states_first_block_input"]=hidden_states.clone()
+        # debug_info=inference_params.debug_info
+        # add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
+        # if add_debug:
+        #     if not "hidden_states_first_block_input" in debug_info:
+        #         debug_info["hidden_states_first_block_input"]=hidden_states.clone()
         residual = (hidden_states + residual) if residual is not None else hidden_states
         hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
         if self.residual_in_fp32:
             residual = residual.to(torch.float32)
-        if add_debug:
-            if not "hidden_states_first_layer_before_mixer" in debug_info:
-                debug_info["hidden_states_first_layer_before_mixer"]=hidden_states.clone()
+        # if add_debug:
+        #     if not "hidden_states_first_layer_before_mixer" in debug_info:
+        #         debug_info["hidden_states_first_layer_before_mixer"]=hidden_states.clone()
         hidden_states = self.mixer(hidden_states, inference_params=inference_params)
         return hidden_states, residual
 

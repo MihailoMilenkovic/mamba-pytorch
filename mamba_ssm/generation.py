@@ -1,20 +1,14 @@
 # Copyright (c) 2023, Albert Gu, Tri Dao.
-import time
-from collections import namedtuple
 from dataclasses import dataclass, field
-from functools import partial
-from typing import Callable, Optional, Sequence, Union
-
+from typing import Optional
 import torch
-import torch.nn.functional as F
-from einops import rearrange, repeat
 from torch import Tensor
 from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer
 
-DEBUG=False
-if DEBUG:
-    print("ADDING DEBUG INFO...")
-    debug_info={"steps":[],"curr_step":0} 
+# DEBUG=False
+# if DEBUG:
+#     print("ADDING DEBUG INFO...")
+#     debug_info={"steps":[],"curr_step":0} 
 
 @dataclass
 class InferenceParams:
@@ -142,8 +136,8 @@ def decode(
     batch_size, seqlen_og = input_ids.shape
     teacher_output_len = teacher_outputs.shape[1] if teacher_outputs is not None else 0
     inference_params = InferenceParams(max_seqlen=max_length, max_batch_size=batch_size)
-    if DEBUG:
-        inference_params.debug_info=debug_info
+    # if DEBUG:
+    #     inference_params.debug_info=debug_info
     def get_logits(input_ids, inference_params):
         decoding = inference_params.seqlen_offset > 0
         if decoding:
@@ -161,12 +155,12 @@ def decode(
             inference_params=inference_params,
             num_last_tokens=1,
         ).logits.squeeze(dim=1)
-        if DEBUG:
-            debug_info["steps"].append({})
-            curr_step=debug_info["curr_step"]
-            curr_info=debug_info["steps"][curr_step]
-            curr_info["logits"]=logits.clone()
-            debug_info["curr_step"]+=1
+        # if DEBUG:
+        #     debug_info["steps"].append({})
+        #     curr_step=debug_info["curr_step"]
+        #     curr_info=debug_info["steps"][curr_step]
+        #     curr_info["logits"]=logits.clone()
+        #     debug_info["curr_step"]+=1
 
         return logits[..., :vocab_size] if vocab_size is not None else logits
 
@@ -206,9 +200,9 @@ def decode(
     if streamer is not None:
         streamer.end()
     output_cls = GreedySearchDecoderOnlyOutput if top_k == 1 else SampleDecoderOnlyOutput
-    if DEBUG:
-        print("DEBUG INFO:",debug_info)
-        torch.save(debug_info,"debug_info_mamba_cpu.pth")
+    # if DEBUG:
+    #     print("DEBUG INFO:",debug_info)
+    #     torch.save(debug_info,"debug_info_mamba_cpu.pth")
     return output_cls(sequences=torch.cat(sequences, dim=1), scores=tuple(scores))
 
 
