@@ -1,5 +1,6 @@
 # Copyright (c) 2023, Tri Dao, Albert Gu.
-
+import os
+import json
 from typing import Optional
 from dataclasses import dataclass, field
 from functools import partial
@@ -15,8 +16,6 @@ from einops import rearrange
 
 
 from mamba_ssm.generation import GenerationMixin
-from mamba_ssm.hf import load_config_hf, load_state_dict_hf
-
 
 @dataclass
 class MambaConfig:
@@ -295,11 +294,15 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
         return CausalLMOutput(logits=lm_logits)
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name, device=None, dtype=None, **kwargs):
-        config_data = load_config_hf(pretrained_model_name)
-        config = MambaConfig(**config_data)
-        model = cls(config, device=device, dtype=dtype, **kwargs)
-        model.load_state_dict(load_state_dict_hf(pretrained_model_name, device=device, dtype=dtype))
+    def load_from_ckpt(cls,pretrained_model_location:str, device=None,dtype=None,**kwargs):
+        config_path = os.path.join(pretrained_model_location,"config.json")
+        weights_path = os.path.join(pretrained_model_location,"pytorch_model.bin")
+        with open(config_path,"r") as f:
+            config_data=json.load(f)
+        config=MambaConfig(**config_data)
+        model=cls(config,device=device,dtype=dtype,**kwargs)
+        state_dict=torch.load(weights_path, map_location=device)
+        model.load_state_dict(state_dict)
         return model
 
 
