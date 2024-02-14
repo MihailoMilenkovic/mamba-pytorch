@@ -4,7 +4,6 @@ import argparse
 import time
 
 import torch
-import torch.nn.functional as F
 
 from transformers import AutoTokenizer
 
@@ -12,7 +11,6 @@ from mamba_ssm.model import MambaLMHeadModel
 
 
 parser = argparse.ArgumentParser(description="Text Generation")
-# parser.add_argument("--model-name", type=str, default="state-spaces/mamba-130m")
 parser.add_argument("--model-ckpt-dir", type=str, default="/net/llm-compiles/mmilenkovic/mamba-130m",help="Path to model checkpoint from huggingface")
 parser.add_argument("--prompt", type=str, default=None)
 parser.add_argument("--promptlen", type=int, default=100)
@@ -30,9 +28,6 @@ dtype = torch.float16
 
 print(f"Loading model from {args.model_ckpt_dir}")
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-neox-20b")
-# model = MambaLMHeadModel.from_pretrained(
-#     args.model_name, device=device, dtype=dtype
-# )
 model = MambaLMHeadModel.load_from_ckpt(
     args.model_ckpt_dir, device=device, dtype=dtype
 )
