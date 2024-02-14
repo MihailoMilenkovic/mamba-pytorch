@@ -1,7 +1,8 @@
 # Copyright (c) 2023, Tri Dao, Albert Gu.
 
-import math
 from typing import Optional
+from dataclasses import dataclass, field
+import math
 
 import torch
 import torch.nn as nn
@@ -10,25 +11,32 @@ from torch import Tensor
 
 from einops import rearrange, repeat
 
-from mamba_ssm.selective_scan_interface import selective_scan
-
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-# Copyright (c) 2023, Albert Gu, Tri Dao.
 
 import math
 from functools import partial
 
 from collections import namedtuple
 
-import torch
-import torch.nn as nn
-
-from mamba_ssm.config_mamba import MambaConfig
 from mamba_ssm.generation import GenerationMixin
 from mamba_ssm.hf import load_config_hf, load_state_dict_hf
+from mamba_ssm.selective_scan_interface import selective_scan
 
 
+
+@dataclass
+class MambaConfig:
+
+    d_model: int = 2560
+    n_layer: int = 64
+    vocab_size: int = 50277
+    ssm_cfg: dict = field(default_factory=dict)
+    rms_norm: bool = True
+    residual_in_fp32: bool = True
+    fused_add_norm: bool = True
+    pad_vocab_size_multiple: int = 8
 
 def layer_norm_fn(x, weight, bias, residual=None, eps=1e-6, prenorm=False, upcast=False):
     dtype = x.dtype
@@ -487,7 +495,6 @@ class Block(nn.Module):
         residual = (hidden_states + residual) if residual is not None else hidden_states
         hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
         if self.residual_in_fp32:
-            print("RESIDUAL IS FP32")
             residual = residual.to(torch.float32)
         if add_debug:
             if not "hidden_states_first_layer_before_mixer" in debug_info:
