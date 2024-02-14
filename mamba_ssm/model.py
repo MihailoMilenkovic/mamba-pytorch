@@ -1,5 +1,6 @@
 # Copyright (c) 2023, Tri Dao, Albert Gu.
-
+import os
+import json
 from typing import Optional
 from dataclasses import dataclass, field
 from functools import partial
@@ -15,8 +16,6 @@ from einops import rearrange
 
 
 from mamba_ssm.generation import GenerationMixin
-from mamba_ssm.hf import load_config_hf, load_state_dict_hf
-
 
 @dataclass
 class MambaConfig:
@@ -217,23 +216,11 @@ class MixerModel(nn.Module):
     def forward(self, input_ids, inference_params=None):
         hidden_states = self.embedding(input_ids)
         residual = None
-        # if hasattr(inference_params,"debug_info"):
-        #     debug_info=inference_params.debug_info
-        #     add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
-        #     if add_debug:
-        #         print("ADDING EMBEDDING LAYER INFO")
-        #         assert not "embedding_layer_states" in debug_info
-        #         debug_info["embedding_layer_states"]=hidden_states.clone()
-        #         debug_info["input_ids"]=input_ids.clone()
-        # else:
-        #     add_debug=False
 
         for layer in self.layers:
             hidden_states, residual = layer(
                 hidden_states, residual, inference_params=inference_params
             )
-            # if add_debug and not "first_layer_out_states" in debug_info:
-            #     debug_info["first_layer_out_states"]=hidden_states.clone()
         residual = (hidden_states + residual) if residual is not None else hidden_states
         hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
         return hidden_states
@@ -295,11 +282,15 @@ class MambaLMHeadModel(nn.Module, GenerationMixin):
         return CausalLMOutput(logits=lm_logits)
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name, device=None, dtype=None, **kwargs):
-        config_data = load_config_hf(pretrained_model_name)
-        config = MambaConfig(**config_data)
-        model = cls(config, device=device, dtype=dtype, **kwargs)
-        model.load_state_dict(load_state_dict_hf(pretrained_model_name, device=device, dtype=dtype))
+    def load_from_ckpt(cls,pretrained_model_location:str, device=None,dtype=None,**kwargs):
+        config_path = os.path.join(pretrained_model_location,"config.json")
+        weights_path = os.path.join(pretrained_model_location,"pytorch_model.bin")
+        with open(config_path,"r") as f:
+            config_data=json.load(f)
+        config=MambaConfig(**config_data)
+        model=cls(config,device=device,dtype=dtype,**kwargs)
+        state_dict=torch.load(weights_path, map_location=device)
+        model.load_state_dict(state_dict)
         return model
 
 
@@ -525,18 +516,10 @@ class Block(nn.Module):
             hidden_states: the sequence to the encoder layer (required).
             residual: hidden_states = Mixer(LN(residual))
         """
-        # debug_info=inference_params.debug_info
-        # add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
-        # if add_debug:
-        #     if not "hidden_states_first_block_input" in debug_info:
-        #         debug_info["hidden_states_first_block_input"]=hidden_states.clone()
         residual = (hidden_states + residual) if residual is not None else hidden_states
         hidden_states = self.norm(residual.to(dtype=self.norm.weight.dtype))
         if self.residual_in_fp32:
             residual = residual.to(torch.float32)
-        # if add_debug:
-        #     if not "hidden_states_first_layer_before_mixer" in debug_info:
-        #         debug_info["hidden_states_first_layer_before_mixer"]=hidden_states.clone()
         hidden_states = self.mixer(hidden_states, inference_params=inference_params)
         return hidden_states, residual
 
