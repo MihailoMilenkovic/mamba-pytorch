@@ -11,7 +11,7 @@ from einops import rearrange, repeat
 from torch import Tensor
 from transformers.generation import GreedySearchDecoderOnlyOutput, SampleDecoderOnlyOutput, TextStreamer
 
-DEBUG=True
+DEBUG=False
 if DEBUG:
     print("ADDING DEBUG INFO...")
     debug_info={"steps":[],"curr_step":0} 
@@ -142,7 +142,8 @@ def decode(
     batch_size, seqlen_og = input_ids.shape
     teacher_output_len = teacher_outputs.shape[1] if teacher_outputs is not None else 0
     inference_params = InferenceParams(max_seqlen=max_length, max_batch_size=batch_size)
-    inference_params.debug_info=debug_info
+    if DEBUG:
+        inference_params.debug_info=debug_info
     def get_logits(input_ids, inference_params):
         decoding = inference_params.seqlen_offset > 0
         if decoding:

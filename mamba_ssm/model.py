@@ -183,13 +183,16 @@ class MixerModel(nn.Module):
     def forward(self, input_ids, inference_params=None):
         hidden_states = self.embedding(input_ids)
         residual = None
-        debug_info=inference_params.debug_info
-        add_debug=debug_info is not None and debug_info["curr_step"]==0
-        if add_debug:
-            print("ADDING EMBEDDING LAYER INFO")
-            assert not "embedding_layer_states" in debug_info
-            debug_info["embedding_layer_states"]=hidden_states.clone()
-            debug_info["input_ids"]=input_ids.clone()
+        if hasattr(inference_params,"debug_info"):
+            debug_info=inference_params.debug_info
+            add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
+            if add_debug:
+                print("ADDING EMBEDDING LAYER INFO")
+                assert not "embedding_layer_states" in debug_info
+                debug_info["embedding_layer_states"]=hidden_states.clone()
+                debug_info["input_ids"]=input_ids.clone()
+        else:
+            add_debug=False
 
         for layer in self.layers:
             hidden_states, residual = layer(
@@ -488,7 +491,7 @@ class Block(nn.Module):
             residual: hidden_states = Mixer(LN(residual))
         """
         debug_info=inference_params.debug_info
-        add_debug=debug_info is not None and debug_info["curr_step"]==0
+        add_debug=debug_info is not None and "curr_step" in debug_info and debug_info["curr_step"]==0
         if add_debug:
             if not "hidden_states_first_block_input" in debug_info:
                 debug_info["hidden_states_first_block_input"]=hidden_states.clone()
