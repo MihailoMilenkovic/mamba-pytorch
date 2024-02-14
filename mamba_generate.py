@@ -11,7 +11,7 @@ from einops import rearrange
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-from mamba_ssm.modules.model import MambaLMHeadModel
+from mamba_ssm.model import MambaLMHeadModel
 
 
 parser = argparse.ArgumentParser(description="Text Generation")

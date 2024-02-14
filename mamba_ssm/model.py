@@ -10,7 +10,7 @@ from torch import Tensor
 
 from einops import rearrange, repeat
 
-from mamba_ssm.ops.selective_scan_interface import selective_scan
+from mamba_ssm.selective_scan_interface import selective_scan
 
 import torch
 import torch.nn.functional as F
@@ -24,9 +24,9 @@ from collections import namedtuple
 import torch
 import torch.nn as nn
 
-from mamba_ssm.models.config_mamba import MambaConfig
-from mamba_ssm.utils.generation import GenerationMixin
-from mamba_ssm.utils.hf import load_config_hf, load_state_dict_hf
+from mamba_ssm.config_mamba import MambaConfig
+from mamba_ssm.generation import GenerationMixin
+from mamba_ssm.hf import load_config_hf, load_state_dict_hf
 
 
 
