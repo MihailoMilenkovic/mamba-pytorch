@@ -2,6 +2,7 @@
 
 from typing import Optional
 from dataclasses import dataclass, field
+from functools import partial
 import math
 
 import torch
@@ -9,14 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from einops import rearrange, repeat
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-import math
-from functools import partial
+from einops import rearrange
 
 from collections import namedtuple
 
