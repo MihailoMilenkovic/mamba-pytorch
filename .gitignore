@@ -1,4 +1,2 @@
-*__pycache__/
-*.egg-info/
-build/
-**.so
+__pycache__
+*.pth
